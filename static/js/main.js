@@ -1,11 +1,12 @@
 document.getElementById("form").addEventListener("submit", (event) => {
   event.preventDefault();
   const text = document.getElementById("exampleMessage").value;
-  axios
-    .post(`/api/paste`, { text })
+  superagent
+    .post(`/api/paste`)
+    .send({ text })
     .then((resp) => {
-      history.pushState({}, "", `#${resp.data.id}`);
-      loadPaste(resp.data.id);
+      history.pushState({}, "", `#${resp.body.id}`);
+      loadPaste(resp.body.id);
     })
     .catch((error) => {
       alert(error);
@@ -20,9 +21,9 @@ async function loadPaste(id) {
       easing: "easeInCubic",
       duration: 500,
     }).finished;
-    const { data } = await axios.get(`/api/paste/${id}`);
+    const { text } = await superagent.get(`/api/paste/${id}`);
     const el = document.getElementById("output");
-    el.innerText = data;
+    el.innerText = text;
     hljs.highlightBlock(el);
     await animateOut;
     document.getElementById("input-col").style.display = "none";
