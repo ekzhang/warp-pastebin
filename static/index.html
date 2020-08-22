@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Basic Page Needs -->
+    <meta charset="utf-8" />
+    <title>Warp Test</title>
+    <meta name="description" content="A small webapp powered by warp" />
+    <meta name="author" content="Eric Zhang" />
+
+    <!-- Mobile Specific Metas -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- FONT -->
+    <link
+      href="//fonts.googleapis.com/css?family=Raleway:400,300,600"
+      rel="stylesheet"
+      type="text/css"
+    />
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/normalize.css" />
+    <link rel="stylesheet" href="css/skeleton.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.2/styles/atom-one-dark.min.css"
+    />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="images/favicon.png" />
+  </head>
+  <body>
+    <!-- Primary Page Layout -->
+    <div class="container">
+      <div class="row">
+        <div
+          id="input-col"
+          class="one-half column"
+          style="display: none; margin-top: 25%;"
+        >
+          <h4>Warp Pastebin</h4>
+          <p>
+            This website is a demo app powered by
+            <a
+              rel="noopener"
+              target="_blank"
+              href="https://github.com/seanmonstar/warp"
+              >warp</a
+            >, showcasing
+            <a rel="noopener" target="_blank" href="https://tokio.rs/">tokio</a
+            >'s mutual exclusion primitives applied to an in-memory pastebin.
+          </p>
+          <form id="form">
+            <textarea
+              class="u-full-width"
+              placeholder="print('Hello, world!') …"
+              id="exampleMessage"
+            ></textarea>
+            <input class="button-primary" type="submit" value="Submit" />
+          </form>
+        </div>
+
+        <div
+          id="output-col"
+          class="column"
+          style="display: none; opacity: 0; margin-top: 10%;"
+        >
+          <pre><code
+            id="output"
+            style="
+              height: 480px;
+              overflow: auto;
+              border: 1px solid #e1e1e1;
+              border-radius: 4px;
+              padding: 8px;
+            "
+          ></code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- End Document -->
+
+    <script src="https://unpkg.com/axios@0.20.0/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/animejs@3.2.0/lib/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.2/highlight.min.js"></script>
+
+    <script>
+      document.getElementById("form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const text = document.getElementById("exampleMessage").value;
+        axios
+          .post(`/api/paste`, { text })
+          .then((resp) => {
+            history.pushState({}, "", `#${resp.data.id}`);
+            loadPaste(resp.data.id);
+          })
+          .catch((error) => {
+            alert(error);
+          });
+      });
+
+      async function loadPaste(id) {
+        try {
+          const animateOut = anime({
+            targets: "#input-col",
+            opacity: 0,
+            easing: "easeInCubic",
+            duration: 500,
+          }).finished;
+          const { data } = await axios.get(`/api/paste/${id}`);
+          const el = document.getElementById("output");
+          el.innerText = data;
+          hljs.highlightBlock(el);
+          await animateOut;
+          document.getElementById("input-col").style.display = "none";
+          document.getElementById("output-col").style.display = "block";
+          anime({
+            targets: "#output-col",
+            opacity: 1,
+            easing: "easeOutCubic",
+            duration: 500,
+          }).finished;
+          anime({
+            targets: "body",
+            background: "#161616",
+            easing: "easeOutCubic",
+            duration: 500,
+          }).finished;
+        } catch (error) {
+          location.href = "/";
+        }
+      }
+
+      if (location.hash) {
+        loadPaste(location.hash.substr(1));
+      } else {
+        document.getElementById("input-col").style.display = "block";
+      }
+    </script>
+  </body>
+</html>
