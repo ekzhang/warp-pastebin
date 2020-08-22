@@ -6,6 +6,6 @@ pub fn make_server(port: u16) -> hyper::Result<Builder<AddrIncoming>> {
     if let Some(l) = listenfd.take_tcp_listener(0).unwrap() {
         Server::from_tcp(l)
     } else {
-        Ok(Server::bind(&([127, 0, 0, 1], port).into()))
+        Ok(Server::bind(&([0, 0, 0, 0], port).into()))
     }
 }
