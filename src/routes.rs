@@ -1,6 +1,6 @@
 use maplit::hashmap;
 use nanoid::nanoid;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -38,7 +38,7 @@ fn json_body<T: DeserializeOwned + Send>(
     warp::body::content_length_limit(max_length).and(warp::body::json())
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Paste {
     text: String,
 }
@@ -59,7 +59,10 @@ impl Store {
 async fn paste(body: Paste, store: Store) -> Result<impl Reply, Rejection> {
     let id = nanoid!();
     store.pastes.write().await.insert(id.to_string(), body);
-    Ok(warp::reply::json(&hashmap! { "id" => id }))
+    Ok(warp::reply::with_status(
+        warp::reply::json(&hashmap! { "id" => id }),
+        StatusCode::CREATED,
+    ))
 }
 
 async fn paste_view(id: String, store: Store) -> Result<impl Reply, Rejection> {
@@ -70,5 +73,88 @@ async fn paste_view(id: String, store: Store) -> Result<impl Reply, Rejection> {
             StatusCode::OK,
         )),
         None => Err(warp::reject()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use warp::http::StatusCode;
+    use warp::test::request;
+
+    use super::{routes, Paste};
+
+    #[tokio::test]
+    async fn test_post() {
+        let api = routes();
+
+        let resp = request()
+            .method("POST")
+            .path("/api/paste")
+            .json(&Paste {
+                text: "Testing paste api".into(),
+            })
+            .reply(&api)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_1mb_too_large() {
+        let api = routes();
+
+        let long_text = "a".repeat(1024 * 1024);
+        let resp = request()
+            .method("POST")
+            .path("/api/paste")
+            .json(&Paste { text: long_text })
+            .reply(&api)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    #[tokio::test]
+    async fn test_not_exists() {
+        let api = routes();
+
+        let resp = request()
+            .method("GET")
+            .path("/api/paste/bad_id_123")
+            .reply(&api)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_e2e() {
+        let api = routes();
+
+        let resp_post = request()
+            .method("POST")
+            .path("/api/paste")
+            .json(&Paste {
+                text: "My favorite pastebin".into(),
+            })
+            .reply(&api)
+            .await;
+
+        assert_eq!(resp_post.status(), StatusCode::CREATED);
+        let json: HashMap<String, String> = serde_json::from_slice(resp_post.body())
+            .expect("Could not deserialize POST response to JSON object");
+        let id = json
+            .get("id")
+            .expect("POST response does not have an `id` property");
+
+        let resp_get = request()
+            .method("GET")
+            .path(&format!("/api/paste/{}", id))
+            .reply(&api)
+            .await;
+
+        assert_eq!(resp_get.status(), StatusCode::OK);
+        assert_eq!(resp_get.body(), "My favorite pastebin");
     }
 }

@@ -1361,6 +1361,7 @@ dependencies = [
  "maplit",
  "nanoid",
  "serde",
+ "serde_json",
  "tokio",
  "warp",
 ]
