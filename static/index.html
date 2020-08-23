@@ -35,7 +35,7 @@
         <div
           id="input-col"
           class="one-half column"
-          style="display: none; margin-top: 25%;"
+          style="display: none; margin-top: 20%;"
         >
           <h4>Warp Pastebin</h4>
           <p>
@@ -50,10 +50,15 @@
             >'s mutual exclusion primitives applied to an in-memory pastebin.
           </p>
           <form id="form">
+            <label for="lang">Language</label>
+            <select class="u-full-width" id="lang"></select>
+
+            <label for="text">Paste</label>
             <textarea
+              autofocus
               class="u-full-width"
               placeholder="print('Hello, world!') …"
-              id="exampleMessage"
+              id="text"
             ></textarea>
             <input class="button-primary" type="submit" value="Submit" />
           </form>
@@ -66,6 +71,7 @@
         >
           <pre><code
             id="output"
+            class="hljs"
             style="
               height: 480px;
               overflow: auto;

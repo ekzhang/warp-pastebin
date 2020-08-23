@@ -1,9 +1,17 @@
+hljs.listLanguages().forEach((lang) => {
+  const option = document.createElement("option");
+  option.innerText = lang;
+  if (lang == "plaintext") option.selected = true;
+  document.getElementById("lang").appendChild(option);
+});
+
 document.getElementById("form").addEventListener("submit", (event) => {
   event.preventDefault();
-  const text = document.getElementById("exampleMessage").value;
+  const text = document.getElementById("text").value;
+  const lang = document.getElementById("lang").value || "plaintext";
   superagent
     .post(`/api/paste`)
-    .send({ text })
+    .send({ text, lang })
     .then((resp) => {
       history.pushState({}, "", `#${resp.body.id}`);
       loadPaste(resp.body.id);
@@ -21,10 +29,9 @@ async function loadPaste(id) {
       easing: "easeInCubic",
       duration: 500,
     }).finished;
-    const { text } = await superagent.get(`/api/paste/${id}`);
+    const { body } = await superagent.get(`/api/paste/${id}`);
     const el = document.getElementById("output");
-    el.innerText = text;
-    hljs.highlightBlock(el);
+    el.innerHTML = hljs.highlight(body.lang, body.text, true).value;
     await animateOut;
     document.getElementById("input-col").style.display = "none";
     document.getElementById("output-col").style.display = "block";

@@ -24,7 +24,12 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
             .and(store_filter.clone())
             .and_then(paste_view);
 
-        warp::path("api").and(paste_filter.or(paste_view_filter))
+        let raw_view_filter = warp::path!("raw" / String)
+            .and(warp::get())
+            .and(store_filter.clone())
+            .and_then(raw_view);
+
+        warp::path("api").and(paste_filter.or(paste_view_filter).or(raw_view_filter))
     };
 
     files.or(api)
@@ -38,9 +43,10 @@ fn json_body<T: DeserializeOwned + Send>(
     warp::body::content_length_limit(max_length).and(warp::body::json())
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 struct Paste {
     text: String,
+    lang: String,
 }
 
 type Pastes = HashMap<String, Paste>;
@@ -68,6 +74,14 @@ async fn paste(body: Paste, store: Store) -> Result<impl Reply, Rejection> {
 async fn paste_view(id: String, store: Store) -> Result<impl Reply, Rejection> {
     let pastes = store.pastes.read().await;
     match pastes.get(&id) {
+        Some(p) => Ok(warp::reply::json(p)),
+        None => Err(warp::reject()),
+    }
+}
+
+async fn raw_view(id: String, store: Store) -> Result<impl Reply, Rejection> {
+    let pastes = store.pastes.read().await;
+    match pastes.get(&id) {
         Some(p) => Ok(warp::reply::with_status(
             String::from(&p.text),
             StatusCode::OK,
@@ -78,6 +92,7 @@ async fn paste_view(id: String, store: Store) -> Result<impl Reply, Rejection> {
 
 #[cfg(test)]
 mod tests {
+    use maplit::hashmap;
     use std::collections::HashMap;
     use warp::http::StatusCode;
     use warp::test::request;
@@ -93,6 +108,7 @@ mod tests {
             .path("/api/paste")
             .json(&Paste {
                 text: "Testing paste api".into(),
+                lang: "plaintext".into(),
             })
             .reply(&api)
             .await;
@@ -108,7 +124,10 @@ mod tests {
         let resp = request()
             .method("POST")
             .path("/api/paste")
-            .json(&Paste { text: long_text })
+            .json(&Paste {
+                text: long_text,
+                lang: "plaintext".into(),
+            })
             .reply(&api)
             .await;
 
@@ -132,21 +151,24 @@ mod tests {
     async fn test_e2e() {
         let api = routes();
 
+        let p = Paste {
+            text: "My favorite pastebin".into(),
+            lang: "plaintext".into(),
+        };
         let resp_post = request()
             .method("POST")
             .path("/api/paste")
-            .json(&Paste {
-                text: "My favorite pastebin".into(),
-            })
+            .json(&p)
             .reply(&api)
             .await;
 
         assert_eq!(resp_post.status(), StatusCode::CREATED);
-        let json: HashMap<String, String> = serde_json::from_slice(resp_post.body())
+        let json: HashMap<&str, &str> = serde_json::from_slice(resp_post.body())
             .expect("Could not deserialize POST response to JSON object");
         let id = json
             .get("id")
             .expect("POST response does not have an `id` property");
+        assert_eq!(json, hashmap! {"id" => *id});
 
         let resp_get = request()
             .method("GET")
@@ -155,6 +177,15 @@ mod tests {
             .await;
 
         assert_eq!(resp_get.status(), StatusCode::OK);
-        assert_eq!(resp_get.body(), "My favorite pastebin");
+        assert_eq!(serde_json::from_slice::<Paste>(resp_get.body()).unwrap(), p);
+
+        let resp_get_raw = request()
+            .method("GET")
+            .path(&format!("/api/raw/{}", id))
+            .reply(&api)
+            .await;
+
+        assert_eq!(resp_get_raw.status(), StatusCode::OK);
+        assert_eq!(resp_get_raw.body(), &p.text);
     }
 }
