@@ -57,7 +57,7 @@ impl Store {
 }
 
 async fn paste(body: Paste, store: Store) -> Result<impl Reply, Rejection> {
-    let id = nanoid!();
+    let id = nanoid!(8);
     store.pastes.write().await.insert(id.to_string(), body);
     Ok(warp::reply::with_status(
         warp::reply::json(&hashmap! { "id" => id }),
